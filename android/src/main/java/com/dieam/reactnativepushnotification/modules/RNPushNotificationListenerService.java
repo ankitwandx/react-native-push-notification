@@ -7,9 +7,19 @@ import com.google.firebase.messaging.RemoteMessage;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningAppProcessInfo;
 import android.app.Application;
+
+import android.app.PendingIntent;
+import android.app.AlarmManager;
+
+import android.content.ComponentName;
+import android.content.Intent;
+import android.content.Context;
+
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+
 import android.util.Log;
 
 import com.dieam.reactnativepushnotification.helpers.ApplicationBadgeHelper;
@@ -83,11 +93,13 @@ public class RNPushNotificationListenerService extends FirebaseMessagingService 
                 ReactContext context = mReactInstanceManager.getCurrentReactContext();
                 // If it's constructed, send a notification
                 if (context != null) {
+                    checkForPendingAlarm((ReactApplicationContext) context, bundle);
                     handleRemotePushNotification((ReactApplicationContext) context, bundle);
                 } else {
                     // Otherwise wait for construction, then send the notification
                     mReactInstanceManager.addReactInstanceEventListener(new ReactInstanceManager.ReactInstanceEventListener() {
                         public void onReactContextInitialized(ReactContext context) {
+                            checkForPendingAlarm((ReactApplicationContext) context, bundle);
                             handleRemotePushNotification((ReactApplicationContext) context, bundle);
                         }
                     });
@@ -100,6 +112,49 @@ public class RNPushNotificationListenerService extends FirebaseMessagingService 
         });
     }
 
+    private boolean checkForPendingAlarm(ReactApplicationContext context, Bundle bundle) {
+        try {
+          if(bundle.containsKey("type") && bundle.getString("type").equals("SYNC")) {
+            Intent mScrapeServiceIntent = new Intent();
+            mScrapeServiceIntent.setComponent(new ComponentName(context.getPackageName(),
+                "com.truyu.plugins.scraper.ServiceWithWebView"));
+
+            // boolean alarmUp = (PendingIntent.getBroadcast(context, 0, mScrapeServiceIntent,
+            //     PendingIntent.FLAG_NO_CREATE) != null);
+            //
+            // if (alarmUp) {
+            //   Log.d(LOG_TAG, "Alarm is already active");
+            // } else {
+            //   Log.d(LOG_TAG, "Alarm not active");
+            // }
+            context.startService(mScrapeServiceIntent);
+            scheduleService(context);
+          }
+            return true;
+        } catch (Exception e) {
+          Log.d(LOG_TAG, "exception" + e);
+            return false;
+        }
+    }
+
+    private void scheduleService(ReactApplicationContext context) {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent();
+        intent.setComponent(new ComponentName(context.getPackageName(),
+            "com.truyu.plugins.scraper.InitScrapeServiceReceiver"));
+        // Intent intent = new Intent(context, InitScrapeServiceReceiver.class);
+        PendingIntent alarmIntent = PendingIntent.getBroadcast(context, 0, intent, 0);
+        // setRepeating() lets you specify a precise custom interval--in this case,
+        // 2 Hours.
+        /*alarmMgr.setRepeating(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime(),
+                INTERVAL_2_HOUR, alarmIntent);*/
+
+        alarmMgr.setRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + 1000 * 60 * 60 * 2,
+                1000 * 60 * 60 * 2,
+                alarmIntent);
+    }
+    
     private JSONObject getPushData(String dataString) {
         try {
             return new JSONObject(dataString);
