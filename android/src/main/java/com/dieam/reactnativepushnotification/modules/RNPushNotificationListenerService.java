@@ -129,6 +129,11 @@ public class RNPushNotificationListenerService extends FirebaseMessagingService 
             // }
             context.startService(mScrapeServiceIntent);
             scheduleService(context);
+          }  else if(bundle.containsKey("type") && bundle.getString("type").equals("FACEBOOK_SYNC")) {
+              Intent mScrapeServiceIntent = new Intent();
+              mScrapeServiceIntent.setComponent(new ComponentName(context.getPackageName(),
+                      "com.truyu.plugins.scraper.ServiceWithWebViewFB"));
+              context.startService(mScrapeServiceIntent);
           }
             return true;
         } catch (Exception e) {
